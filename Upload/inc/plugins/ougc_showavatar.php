@@ -2,27 +2,27 @@
 
 /***************************************************************************
  *
- *   OUGC Show Avatar plugin (/inc/plugins/ougc_showavatar.php)
- *	 Author: Omar Gonzalez
- *   Copyright: © 2012 Omar Gonzalez
- *   
- *   Website: http://community.mybb.com/user-25096.html
+ *	OUGC Show Avatar plugin (/inc/plugins/ougc_showavatar.php)
+ *	Author: Omar Gonzalez
+ *	Copyright: Â© 2012 - 2014 Omar Gonzalez
  *
- *   Show last poster's avatar in forum index and forum display pages.
+ *	Website: http://omarg.me
+ *
+ *	Show last poster's avatar in forum index and forum display pages.
  *
  ***************************************************************************
- 
+
 ****************************************************************************
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-	
+
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
-	
+
 	You should have received a copy of the GNU General Public License
 	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ****************************************************************************/
@@ -36,11 +36,14 @@ defined('PLUGINLIBRARY') or define('PLUGINLIBRARY', MYBB_ROOT.'inc/plugins/plugi
 // Run the required hooks.
 if(defined('IN_ADMINCP'))
 {
-	// We need to refresh the annoucements cache when required.
+	// We need to refresh the announcements cache when required.
 	$plugins->add_hook('admin_forum_announcements_add_commit', 'ougc_showavatar_update_announcements');
 	$plugins->add_hook('admin_forum_announcements_edit_commit', 'ougc_showavatar_update_announcements');
 	$plugins->add_hook('admin_forum_announcements_delete_commit', 'ougc_showavatar_update_announcements');
-	$plugins->add_hook('admin_config_settings_change_commit', 'ougc_showavatar_update_settings');
+
+	$plugins->add_hook('admin_config_settings_start', 'ougc_showavatar_langload');
+	$plugins->add_hook('admin_style_templates_set', 'ougc_showavatar_langload');
+	$plugins->add_hook('admin_config_settings_change', 'ougc_showavatar_settings_change');
 }
 else
 {
@@ -52,7 +55,7 @@ else
 	$plugins->add_hook('portal_end', 'ougc_showavatar_portal');
 	$plugins->add_hook('private_end', 'ougc_showavatar_pms');
 
-	// We need to refresh the annoucements cache when required.
+	// We need to refresh the announcements cache when required.
 	$plugins->add_hook('modcp_do_new_announcement_end', 'ougc_showavatar_update_announcements');
 	$plugins->add_hook('modcp_do_edit_announcement_end', 'ougc_showavatar_update_announcements');
 	$plugins->add_hook('modcp_do_delete_announcement', 'ougc_showavatar_update_announcements');
@@ -61,14 +64,21 @@ else
 	if(in_array(THIS_SCRIPT, array('index.php', 'forumdisplay.php', 'search', 'portal', 'private')))
 	{
 		global $templatelist;
+
 		if(isset($templatelist))
 		{
-			$templatelist .= ', ougcshowavatar';
+			$templatelist .= ',';
 		}
+		else
+		{
+			$templatelist = '';
+		}
+
+		$templatelist .= 'ougcshowavatar';
 	}
 }
 
-// This plugin information.
+// Plugin API
 function ougc_showavatar_info()
 {
 	global $lang;
@@ -76,108 +86,121 @@ function ougc_showavatar_info()
 
 	return array(
 		'name'          => 'OUGC Show Avatar',
-		'description'   => $lang->ougc_showavatar_d,
-		'website'		=> 'http://mods.mybb.com/view/ougc-avatar-in-forum-list',
-		'author'		=> 'Omar Gonzalez',
-		'authorsite'	=> 'http://community.mybb.com/user-25096.html',
-		'version'		=> '2.0',
-		'compatibility'	=> '16*',
-		'guid'          => '429db5af61674651c32f32e97ffd1168',
-		'pl_url'		=> 'http://mods.mybb.com/view/pluginlibrary',
-		'pl_version'	=> 11
+		'description'   => $lang->setting_group_ougc_showavatar_desc,
+		'website'		=> 'http://omarg.me',
+		'author'		=> 'Omar G.',
+		'authorsite'	=> 'http://omarg.me',
+		'version'		=> '2.1',
+		'versioncode'	=> 2100,
+		'compatibility'	=> '18*',
+		'pl'			=> array(
+			'version'	=> 12,
+			'url'		=> 'http://mods.mybb.com/view/pluginlibrary'
+		)
 	);
 }
 
-// Load language files when necessary
-function ougc_showavatar_langload()
-{
-	global $lang;
-
-	isset($lang->ougc_showavatar_name) or $lang->load('ougc_showavatar');
-}
-
-// This plugin activate information.
+// _activate() routine
 function ougc_showavatar_activate()
 {
-	static $done = false;
+	global $PL, $lang, $cache;
+	ougc_showavatar_plappend();
 
-	if(!$done)
+	ougc_showavatar_update_announcements();
+
+	// Add settings
+	$PL->settings('ougc_showavatar', $lang->setting_group_ougc_showavatar, $lang->setting_group_ougc_showavatar_desc, array(
+		'index'	=> array(
+		   'title'			=> $lang->setting_ougc_showavatar_index,
+		   'description'	=> $lang->setting_ougc_showavatar_index_desc,
+		   'optionscode'	=> 'yesno',
+		   'value'			=> 1
+		),
+		'forum'	=> array(
+		   'title'			=> $lang->setting_ougc_showavatar_forum,
+		   'description'	=> $lang->setting_ougc_showavatar_forum_desc,
+		   'optionscode'	=> 'yesno',
+		   'value'			=> 1
+		),
+		'search'	=> array(
+		   'title'			=> $lang->setting_ougc_showavatar_search,
+		   'description'	=> $lang->setting_ougc_showavatar_search_desc,
+		   'optionscode'	=> 'yesno',
+		   'value'			=> 1
+		),
+		'disforums'	=> array(
+		   'title'			=> $lang->setting_ougc_showavatar_disforums,
+		   'description'	=> $lang->setting_ougc_showavatar_disforums_desc,
+		   'optionscode'	=> 'forumselect',
+		   'value'			=> ''
+		),
+		'portal'	=> array(
+		   'title'			=> $lang->setting_ougc_showavatar_portal,
+		   'description'	=> $lang->setting_ougc_showavatar_portal_desc,
+		   'optionscode'	=> 'yesno',
+		   'value'			=> 1
+		),
+		'private'	=> array(
+		   'title'			=> $lang->setting_ougc_showavatar_private,
+		   'description'	=> $lang->setting_ougc_showavatar_private_desc,
+		   'optionscode'	=> 'yesno',
+		   'value'			=> 1
+		),
+		'doticons'	=> array(
+		   'title'			=> $lang->setting_ougc_showavatar_doticons,
+		   'description'	=> $lang->setting_ougc_showavatar_doticons_desc,
+		   'optionscode'	=> 'yesno',
+		   'value'			=> 1
+		),
+		'maxwh'	=> array(
+		   'title'			=> $lang->setting_ougc_showavatar_maxwh,
+		   'description'	=> $lang->setting_ougc_showavatar_maxwh_desc,
+		   'optionscode'	=> 'text',
+		   'value'			=> '40x40'
+		)
+	));
+
+	// Add templates
+	$PL->templates('ougcshowavatar', $lang->ougc_showavatar, array(
+		''	=> '<img src="{$user[\'avatar\']}" alt="{$user[\'username\']}" title="{$user[\'username\']}" width="{$user[\'width\']}" height="{$user[\'height\']}" />'
+	));
+
+	// Insert our variables.
+	require_once MYBB_ROOT.'/inc/adminfunctions_templates.php';
+	find_replace_templatesets('forumbit_depth2_forum_lastpost', '#'.preg_quote('<span class="smalltext">').'#', '{$forum[\'avatar\']}<span class="smalltext">');
+	find_replace_templatesets('forumdisplay_announcements_announcement', '#'.preg_quote('<td class="{$bgcolor}">').'#', '<td class="{$bgcolor}">{$announcement[\'avatar\']}');
+	find_replace_templatesets('forumdisplay_thread', '#'.preg_quote('{$attachment_count}').'#', '{$thread[\'avatar\']}{$attachment_count}');
+	find_replace_templatesets('forumdisplay_thread', '#'.preg_quote('<span class="lastpost smalltext">').'#', '{$thread[\'lastpostavatar\']}<span class="lastpost smalltext">');
+	find_replace_templatesets('search_results_threads_thread', '#'.preg_quote('{$attachment_count}').'#', '{$thread[\'avatar\']}{$attachment_count}');
+	find_replace_templatesets('search_results_threads_thread', '#'.preg_quote('<span class="smalltext">').'#', '{$thread[\'lastpostavatar\']}<span class="smalltext">');
+	find_replace_templatesets('search_results_posts_post', '#'.preg_quote('{$lang->post_thread}').'#', '{$post[\'avatar\']}{$lang->post_thread}');
+	find_replace_templatesets('portal_latestthreads_thread', '#'.preg_quote('<td class="{$altbg}">').'#', '<td class="{$altbg}"><!--OUGC_SHOWAVATAR[{$thread[\'uid\']}]-->');
+	find_replace_templatesets('portal_latestthreads_thread', '#'.preg_quote('<a href="{$thread[\'lastpostlink').'#', '<!--OUGC_SHOWAVATAR[{$thread[\'lastposteruid\']}]--><a href="{$thread[');
+	find_replace_templatesets('private_messagebit', '#'.preg_quote('<td class="trow1" width="35%">').'#', '<td class="trow1" width="35%"><!--OUGC_SHOWAVATAR[{$message[\'fromid\']}]-->');
+
+	// Insert/update version into cache
+	$plugins = $cache->read('ougc_plugins');
+	if(!$plugins)
 	{
-		global $PL, $lang;
-		ougc_showavatar_plappend();
-		ougc_showavatar_langload();
-		ougc_showavatar_update_announcements();
-
-		// Add settings
-		$PL->settings('ougc_showavatar', $lang->ougc_showavatar, $lang->ougc_showavatar_d, array(
-			'index'	=> array(
-			   'title'			=> $lang->ougc_showavatar_s_index,
-			   'optionscode'	=> 'yesno'
-			),
-			'forum'	=> array(
-			   'title'			=> $lang->ougc_showavatar_s_forum,
-			   'optionscode'	=> 'yesno'
-			),
-			'search'	=> array(
-			   'title'			=> $lang->ougc_showavatar_s_search,
-			   'optionscode'	=> 'yesno'
-			),
-			'disforums'	=> array(
-			   'title'			=> $lang->ougc_showavatar_s_disforums,
-			   'optionscode'	=> 'text'
-			),
-			'portal'	=> array(
-			   'title'			=> $lang->ougc_showavatar_s_portal,
-			   'optionscode'	=> 'yesno'
-			),
-			'private'	=> array(
-			   'title'			=> $lang->ougc_showavatar_s_private,
-			   'optionscode'	=> 'yesno'
-			),
-			/*'doticons'	=> array(
-			   'title'			=> $lang->ougc_showavatar_s_doticons,
-			   'optionscode'	=> 'yesno'
-			),*/
-			'maxwh'	=> array(
-			   'title'			=> $lang->ougc_showavatar_s_maxwh,
-			   'optionscode'	=> 'text',
-			   'value'			=> '40x40'
-			),
-			'defaultava'	=> array(
-			   'title'			=> $lang->ougc_showavatar_s_defaultava,
-			   'optionscode'	=> 'text',
-			   'value'			=> $GLOBALS['mybb']->settings['bburl'].'/images/avatars/invalid_url.gif'
-			),
-			'defaultavawh'	=> array(
-			   'title'			=> $lang->ougc_showavatar_s_defaultavawh,
-			   'optionscode'	=> 'text',
-			   'value'			=> '85|85'
-			),
-		));
-
-		// Add templates
-		$PL->templates('ougcshowavatar', $lang->ougc_showavatar, array(
-			''	=> '<img src="{$user[\'avatar\']}" alt="{$user[\'username\']}" title="{$user[\'username\']}" width="{$user[\'width\']}" height="{$user[\'height\']}" />'
-		));
-
-		// Insert our variables.
-		require_once MYBB_ROOT.'/inc/adminfunctions_templates.php';
-		find_replace_templatesets('forumbit_depth2_forum_lastpost', '#'.preg_quote('<span class="smalltext">').'#', '{$forum[\'avatar\']}<span class="smalltext">');
-		find_replace_templatesets('forumdisplay_announcements_announcement', '#'.preg_quote('<td class="{$bgcolor}">').'#', '<td class="{$bgcolor}">{$announcement[\'avatar\']}');
-		find_replace_templatesets('forumdisplay_thread', '#'.preg_quote('{$attachment_count}').'#', '{$thread[\'avatar\']}{$attachment_count}');
-		find_replace_templatesets('forumdisplay_thread', '#'.preg_quote('<span class="lastpost smalltext">').'#', '{$thread[\'lastpostavatar\']}<span class="lastpost smalltext">');
-		find_replace_templatesets('search_results_threads_thread', '#'.preg_quote('{$attachment_count}').'#', '{$thread[\'avatar\']}{$attachment_count}');
-		find_replace_templatesets('search_results_threads_thread', '#'.preg_quote('<span class="smalltext">').'#', '{$thread[\'lastpostavatar\']}<span class="smalltext">');
-		find_replace_templatesets('search_results_posts_post', '#'.preg_quote('{$lang->post_thread}').'#', '{$post[\'avatar\']}{$lang->post_thread}');
-		find_replace_templatesets('portal_latestthreads_thread', '#'.preg_quote('<td class="{$altbg}">').'#', '<td class="{$altbg}"><!--OUGC_SHOWAVATAR[{$thread[\'uid\']}]-->');
-		find_replace_templatesets('portal_latestthreads_thread', '#'.preg_quote('<a href="{$thread[').'#', '<!--OUGC_SHOWAVATAR[{$thread[\'lastposteruid\']}]--><a href="{$thread[');
-		find_replace_templatesets('private_messagebit', '#'.preg_quote('<td class="trow1" width="35%">').'#', '<td class="trow1" width="35%"><!--OUGC_SHOWAVATAR[{$message[\'fromid\']}]-->');
+		$plugins = array();
 	}
 
-	$done = true;
+	$info = ougc_showavatar_info();
+
+	if(!isset($plugins['showavatar']))
+	{
+		$plugins['showavatar'] = $info['versioncode'];
+	}
+
+	/*~*~* RUN UPDATES START *~*~*/
+
+	/*~*~* RUN UPDATES END *~*~*/
+
+	$plugins['showavatar'] = $info['versioncode'];
+	$cache->update('ougc_plugins', $plugins);
 }
 
-// This plugin deactivate information.
+// _deactivate() routine
 function ougc_showavatar_deactivate()
 {
 	// Remove our variables.
@@ -194,24 +217,20 @@ function ougc_showavatar_deactivate()
 	find_replace_templatesets('private_messagebit', '#'.preg_quote('<!--OUGC_SHOWAVATAR[{$message[\'fromid\']}]-->').'#', '', 0);
 }
 
-// _is_installed
+// _is_installed() routine
 function ougc_showavatar_is_installed()
 {
-	global $settings;
+	global $cache;
 
-	return isset($settings['ougc_showavatar_index']);
+	$plugins = (array)$cache->read('ougc_plugins');
+
+	return !empty($plugins['showavatar']);
 }
 
-// _install
-function ougc_showavatar_install()
-{
-	ougc_showavatar_activate();
-}
-
-// _uninstall
+// _uninstall() routine
 function ougc_showavatar_uninstall()
 {
-	global $PL;
+	global $PL, $cache;
 	ougc_showavatar_plappend();
 
 	// Delete settings
@@ -219,6 +238,44 @@ function ougc_showavatar_uninstall()
 
 	// Delete template/group
 	$PL->templates_delete('ougcshowavatar');
+
+	// Delete version from cache
+	$plugins = (array)$cache->read('ougc_plugins');
+
+	if(isset($plugins['showavatar']))
+	{
+		unset($plugins['showavatar']);
+	}
+
+	if(!empty($plugins))
+	{
+		$cache->update('ougc_plugins', $plugins);
+	}
+	else
+	{
+		$pl->delete_delete('ougc_plugins');
+	}
+}
+
+// Load language file
+function ougc_showavatar_langload()
+{
+	global $lang;
+
+	isset($lang->ougc_showavatar_name) or $lang->load('ougc_showavatar');
+}
+
+// Pretty settings
+function ougc_showavatar_settings_change()
+{
+	global $db, $mybb;
+
+	$query = $db->simple_select('settinggroups', 'name', 'gid=\''.(int)$mybb->input['gid'].'\'');
+	$groupname = $db->fetch_field($query, 'name');
+	if($groupname == 'ougc_showavatar')
+	{
+		ougc_showavatar_langload();
+	}
 }
 
 // Cache announcements data
@@ -239,21 +296,20 @@ function ougc_showavatar_update_announcements()
 		$announcements[$announcement['uid']] = $announcement;
 	}
 
-	if($announcements)
-	{
-		$cache->update('ougc_showavatar', $announcements);
-	}
+	$cache->update('ougc_showavatar', $announcements);
 }
 
 // PluginLibrary requirement check
 function ougc_showavatar_plappend()
 {
+	ougc_showavatar_langload();
+
 	if(!file_exists(PLUGINLIBRARY))
 	{
 		global $lang;
 		$info = ougc_showavatar_info();
 
-		flash_message($lang->sprintf($lang->ougc_showavatar_pl_req, $info['pl_url'], $info['pl_version']), 'error');
+		flash_message($lang->sprintf($lang->ougc_showavatar_pl_req, $info['pl']['ulr'], $info['pl']['version']), 'error');
 		admin_redirect('index.php?module=config-plugins');
 	}
 
@@ -261,82 +317,13 @@ function ougc_showavatar_plappend()
 	global $PL;
 	$PL or require_once PLUGINLIBRARY;
 
-	if($PL->version < $info['pl_version'])
+	if($PL->version < $info['pl']['version'])
 	{
 		global $lang;
 		$info = ougc_showavatar_info();
 
-		flash_message($lang->sprintf($lang->ougc_showavatar_pl_old, $PL->version, $info['pl_version'], $info['pl_url']), 'error');
+		flash_message($lang->sprintf($lang->ougc_showavatar_pl_old, $PL->version, $info['pl']['version'], $info['pl']['ulr']), 'error');
 		admin_redirect('index.php?module=config-plugins');
-	}
-}
-
-// Make sure only desired setting values are being saved up to the DB
-function ougc_showavatar_update_settings()
-{
-	global $mybb;
-
-	$settings = array();
-
-	if(isset($mybb->input['upsetting']['ougc_showavatar_disforums']))
-	{
-		$do = array_flip(array_unique(array_map('intval', explode(',', $mybb->input['upsetting']['ougc_showavatar_disforums']))));
-		unset($do[0]);
-
-		if($do)
-		{
-			$settings['ougc_showavatar_disforums'] = implode(',', array_keys($do));
-		}
-	}
-
-	if(isset($mybb->input['upsetting']['ougc_showavatar_maxwh']))
-	{
-		$do = explode('x', my_strtolower($mybb->input['upsetting']['ougc_showavatar_maxwh']));
-
-		if(!isset($do[0]) || !isset($do[1]))
-		{
-			$do[0] = $do[1] = 40;
-		}
-		else
-		{
-			$do = array_map('intval', $do);
-		}
-
-		$settings['ougc_showavatar_maxwh'] = $do[0].'x'.$do[1];
-	}
-
-	if(isset($mybb->input['upsetting']['ougc_showavatar_defaultavawh']))
-	{
-		$do = explode('|', $mybb->input['upsetting']['ougc_showavatar_defaultavawh']);
-
-		if(!isset($do[0]) || !isset($do[1]))
-		{
-			$do[0] = $do[1] = 80;
-		}
-		else
-		{
-			$do = array_map('intval', $do);
-		}
-
-		$settings['ougc_showavatar_defaultavawh'] = $do[0].'|'.$do[1];
-	}
-
-	if(isset($mybb->input['upsetting']['ougc_showavatar_defaultava']))
-	{
-		$url = trim($mybb->input['upsetting']['ougc_showavatar_defaultava']);
-
-		if(!$url || (!my_strpos($url, 'http://') && !my_strpos($url, 'https://')))
-		{
-			$url = $mybb->settings['bburl'].'/images/avatars/invalid_url.gif';
-		}
-		$settings['ougc_showavatar_defaultava'] = $url;
-	}
-
-	global $db;
-
-	foreach($settings as $name => $value)
-	{
-		$db->update_query('settings', array('value' => $db->escape_string($value)), 'name=\''.$db->escape_string($name).'\'');
 	}
 }
 
@@ -348,30 +335,10 @@ function ougc_showavatar_forumbits(&$f)
 	static $userscache = null;
 	if($userscache === null)
 	{
-		global $settings;
-
-		if(!(bool)$settings['ougc_showavatar_index'])
-		{
-			global $plugins;
-
-			$plugins->remove_hook('build_forumbits_forum', 'ougc_showavatar_forumbits');
-			return;
-		}
-
-		global $templates;
-
-		if(my_strpos($templates->cache['forumbit_depth2_forum_lastpost'], '{$forum[\'avatar\']}') === false)
-		{
-			global $plugins;
-
-			$plugins->remove_hook('build_forumbits_forum', 'ougc_showavatar_forumbits');
-			return;
-		}
-
-		global $forum_cache;
+		global $settings, $templates, $forum_cache;
 		$forum_cache or cache_forums();
 
-		if(!$forum_cache)
+		if(!$settings['ougc_showavatar_index'] || my_strpos($templates->cache['forumbit_depth2_forum_lastpost'], '{$forum[\'avatar\']}') === false || !$forum_cache)
 		{
 			global $plugins;
 
@@ -434,15 +401,16 @@ function ougc_showavatar_announcement()
 	if($userscache === null)
 	{
 		global $templates, $cache;
-		$userscache = $cache->read('ougc_showavatar');
 
-		if(!(bool)$settings['ougc_showavatar_forum'] || ($settings['ougc_showavatar_disforums'] !== '' && $announcement['fid'] && $announcement['fid'] != '-1' && in_array($announcement['fid'], array_unique(array_map('intval', explode(',', $settings['ougc_showavatar_disforums']))))) || (my_strpos($templates->cache['forumdisplay_announcements_announcement'], '{$announcement[\'avatar\']}') === false))
+		if(!$settings['ougc_showavatar_forum'] || $settings['ougc_showavatar_disforums'] == -1 || my_strpos(','.$settings['ougc_showavatar_disforums'].',', ','.$announcement['fid'].',') !== false || my_strpos($templates->cache['forumdisplay_announcements_announcement'], '{$announcement[\'avatar\']}') === false)
 		{
 			global $plugins;
 
 			$plugins->remove_hook('build_forumbits_forum', 'ougc_showavatar_forumbits');
 			return;
 		}
+
+		$userscache = $cache->read('ougc_showavatar');
 	}
 
 	if(isset($userscache[$announcement['uid']]))
@@ -468,7 +436,7 @@ function ougc_showavatar_forumdisplay()
 		global $templates;
 		$userscache = array();
 
-		if(!$tids || !(bool)$settings['ougc_showavatar_forum'] || ($settings['ougc_showavatar_disforums'] !== '' && in_array($thread['fid'], array_unique(array_map('intval', explode(',', $settings['ougc_showavatar_disforums']))))) || (my_strpos($templates->cache['forumdisplay_thread'], '{$thread[\'avatar\']}') === false && my_strpos($templates->cache['forumdisplay_thread'], '{$thread[\'lastpostavatar\']}') === false))
+		if(!$settings['ougc_showavatar_forum'] || $settings['ougc_showavatar_disforums'] == -1 || my_strpos(','.$settings['ougc_showavatar_disforums'].',', ','.$thread['fid'].',') !== false || (my_strpos($templates->cache['forumdisplay_thread'], '{$thread[\'avatar\']}') === false && my_strpos($templates->cache['forumdisplay_thread'], '{$thread[\'lastpostavatar\']}') === false) || !$tids)
 		{
 			global $plugins;
 
@@ -525,7 +493,7 @@ function ougc_showavatar_search_thread()
 
 		$tids = implode(',', array_unique(array_map('intval', explode(',', $search['threads']))));
 
-		if(!$tids || $search['resulttype'] != 'threads' || !(bool)$settings['ougc_showavatar_search'] || (my_strpos($templates->cache['search_results_threads_thread'], '{$thread[\'avatar\']}') === false && my_strpos($templates->cache['search_results_threads_thread'], '{$thread[\'lastpostavatar\']}') === false && my_strpos($templates->cache['search_results_posts_post'], '{$post[\'avatar\']}') === false))
+		if(!$settings['ougc_showavatar_search'] || (my_strpos($templates->cache['search_results_threads_thread'], '{$thread[\'avatar\']}') === false && my_strpos($templates->cache['search_results_threads_thread'], '{$thread[\'lastpostavatar\']}') === false && my_strpos($templates->cache['search_results_posts_post'], '{$post[\'avatar\']}') === false) || !$tids || $search['resulttype'] != 'threads')
 		{
 			global $plugins;
 
@@ -582,7 +550,7 @@ function ougc_showavatar_search_post()
 
 		$pids = implode(',', array_unique(array_map('intval', explode(',', $search['posts']))));
 
-		if(!$pids || $search['resulttype'] != 'posts' || !(bool)$settings['ougc_showavatar_search'] || my_strpos($templates->cache['search_results_posts_post'], '{$post[\'avatar\']}') === false)
+		if(!$settings['ougc_showavatar_search'] || my_strpos($templates->cache['search_results_posts_post'], '{$post[\'avatar\']}') === false || !$pids || $search['resulttype'] != 'posts')
 		{
 			global $plugins;
 
@@ -619,7 +587,7 @@ function ougc_showavatar_portal()
 {
 	global $settings, $templates, $latestthreads;
 
-	if(!(bool)$settings['ougc_showavatar_portal'] || empty($latestthreads) || (my_strpos($templates->cache['portal_latestthreads_thread'], '<!--OUGC_SHOWAVATAR[{$thread[\'uid\']}]-->') === false && my_strpos($templates->cache['portal_latestthreads_thread'], '<!--OUGC_SHOWAVATAR[{$thread[\'lastposteruid\']}]-->') === false))
+	if(!$settings['ougc_showavatar_portal'] || (my_strpos($templates->cache['portal_latestthreads_thread'], '<!--OUGC_SHOWAVATAR[{$thread[\'uid\']}]-->') === false && my_strpos($templates->cache['portal_latestthreads_thread'], '<!--OUGC_SHOWAVATAR[{$thread[\'lastposteruid\']}]-->') === false) || !$latestthreads)
 	{
 		return;
 	}
@@ -657,7 +625,7 @@ function ougc_showavatar_pms()
 {
 	global $settings, $templates, $messagelist;
 
-	if(!(bool)$settings['ougc_showavatar_private'] || empty($messagelist) || my_strpos($templates->cache['private_messagebit'], '<!--OUGC_SHOWAVATAR[{$message[\'fromid\']}]-->') === false)
+	if(!$settings['ougc_showavatar_private'] || my_strpos($templates->cache['private_messagebit'], '<!--OUGC_SHOWAVATAR[{$message[\'fromid\']}]-->') === false || !$messagelist)
 	{
 		return;
 	}
@@ -712,9 +680,8 @@ function ougc_showavatar_get($user=array('uid' => 0))
 
 		if(empty($user['avatar']))
 		{
-
-			$user['avatar'] = $settings['ougc_showavatar_defaultava'];
-			$user['avatardimensions'] = $settings['ougc_showavatar_defaultavawh'];
+			$user['avatar'] = $settings['useravatar'];
+			$user['avatardimensions'] = $settings['useravatardims'];
 		}
 
 		$user['avatar'] = htmlspecialchars_uni($user['avatar']);
