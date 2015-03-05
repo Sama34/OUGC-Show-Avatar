@@ -253,7 +253,7 @@ function ougc_showavatar_uninstall()
 	}
 	else
 	{
-		$pl->delete_delete('ougc_plugins');
+		$cache->delete('ougc_plugins');
 	}
 }
 
@@ -270,12 +270,9 @@ function ougc_showavatar_settings_change()
 {
 	global $db, $mybb;
 
-	$query = $db->simple_select('settinggroups', 'name', 'gid=\''.(int)$mybb->input['gid'].'\'');
-	$groupname = $db->fetch_field($query, 'name');
-	if($groupname == 'ougc_showavatar')
-	{
-		ougc_showavatar_langload();
-	}
+	$query = $db->simple_select('settinggroups', 'name', "gid='{$mybb->get_input('gid', 1)}'");
+
+	($db->fetch_field($query, 'name') != 'ougc_showavatar') or ougc_showavatar_langload();
 }
 
 // Cache announcements data
