@@ -61,7 +61,7 @@ else
 	$plugins->add_hook('modcp_do_delete_announcement', 'ougc_showavatar_update_announcements');
 
 	// Cache our template.
-	if(in_array(THIS_SCRIPT, array('index.php', 'forumdisplay.php', 'search', 'portal', 'private')))
+	if(in_array(THIS_SCRIPT, array('index.php', 'forumdisplay.php', 'search.php', 'portal.php', 'private.php')))
 	{
 		global $templatelist;
 
